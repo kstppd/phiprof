@@ -114,6 +114,8 @@ private:
                     const std::map<std::string, std::string> &groupIds,                  
                     std::ofstream &output);   
    
+   bool generateFlameGraphDataFile(const std::string &outputPath);
+   
    bool printGroupStatistics(double minFraction,
                              const std::map<std::string, std::string> &groupIds,
                              std::ofstream &output);

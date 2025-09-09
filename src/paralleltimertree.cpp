@@ -31,7 +31,7 @@ License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 #include "paralleltimertree.hpp"
 #include "prettyprinttable.hpp"
 #include "common.hpp"
-
+#include <numeric>
 #ifdef _OPENMP
 #include "omp.h"
 #endif
@@ -490,6 +490,60 @@ bool ParallelTimerTree::printTimers(double minFraction, const std::map<std::stri
    return true;
 }
 
+/**
+ * @brief Generates a txt file with flame graph data.
+ */
+bool ParallelTimerTree::generateFlameGraphDataFile(const std::string &filename) {
+  // Helper
+  auto join = [](const std::vector<std::string> &elements,
+                 const std::string &delim) -> std::string {
+    if (elements.empty()) {
+      return "";
+    }
+    return std::accumulate(
+        std::next(elements.begin()), elements.end(), elements[0],
+        [&delim](const std::string &a, const std::string &b) {
+          return a + delim + b;
+        });
+  };
+
+  if (rankInPrint == 0) {
+    std::ofstream f(filename);
+    if (!f.is_open()) {
+      std::cerr << "Error: Could not open file for writing flamegraph data: "
+                << filename << std::endl;
+      return false;
+    }
+    std::vector<std::string> stack;
+    for (unsigned int i = 1; i < stats.id.size(); i++) {
+      const int id = stats.id[i];
+      const int level = stats.level[i];
+      std::string label;
+      if (id != -1) {
+        label = (*this)[id].getLabel();
+      } else {
+        label = "Uknown element";
+      }
+      double avg_seconds = 0.0;
+      if (nProcessesInPrint > 0) {
+        avg_seconds = stats.timeSum[i] / nProcessesInPrint;
+      }
+      const std::size_t value = static_cast<long long>(avg_seconds * 1.0e6);
+      if (value <= 0) {
+        continue;
+      }
+      if (level > 0) {
+        stack.resize(level - 1);
+      } else {
+        stack.clear();
+      }
+      stack.push_back(label);
+      f << join(stack, ";") << " " << value << "\n";
+    }
+    f.close();
+  }
+  return true;
+}
 
 //print out global timers
 //If any labels differ, then this print will deadlock. Only call it with a communicator that is guaranteed to be consistent on all processes.
@@ -736,6 +790,13 @@ bool ParallelTimerTree::print(MPI_Comm communicator, std::string fileNamePrefix)
          }
          output.close();
       }
+      //Generate detailed flamegraph file
+      std::stringstream fname_flamegraph;
+      fname_flamegraph << fileNamePrefix << "_flamegraph"<< ".txt";
+      if (!generateFlameGraphDataFile(fname_flamegraph.str())){
+        std::cerr << "ERROR: Failed to generate flamegraph file!" << std::endl;
+      }
+
       MPI_Comm_free(&printComm);
    }
 
