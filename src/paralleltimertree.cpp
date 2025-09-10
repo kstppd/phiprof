@@ -513,7 +513,6 @@ bool ParallelTimerTree::generateFlameGraphDataFile(
       return true;
     }
 
-    constexpr std::size_t max_loops = 1000;
     std::vector<double> exclusiveTimeSum = stats.timeSum;
     std::vector<int> parentIndexStack;
     // Calculate exclusive timers for flamegraph by removing children
