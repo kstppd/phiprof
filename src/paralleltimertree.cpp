@@ -31,7 +31,6 @@ License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 #include "paralleltimertree.hpp"
 #include "prettyprinttable.hpp"
 #include "common.hpp"
-#include <numeric>
 #ifdef _OPENMP
 #include "omp.h"
 #endif
