@@ -521,7 +521,6 @@ bool ParallelTimerTree::generateFlameGraphDataFile(
       const int currentLevel = stats.level[i];
       while (!parentIndexStack.empty() &&
              stats.level[parentIndexStack.back()] >= currentLevel) {
-        counter++;
         parentIndexStack.pop_back();
       }
 
