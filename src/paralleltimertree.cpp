@@ -493,51 +493,72 @@ bool ParallelTimerTree::printTimers(double minFraction, const std::map<std::stri
 /**
  * @brief Generates a txt file with flame graph data.
  */
-bool ParallelTimerTree::generateFlameGraphDataFile(const std::string &filename) {
+bool ParallelTimerTree::generateFlameGraphDataFile(
+    const std::string &filename) {
   // Helper
   auto join = [](const std::vector<std::string> &elements,
                  const std::string &delim) -> std::string {
     if (elements.empty()) {
       return "";
     }
-    return std::accumulate(
-        std::next(elements.begin()), elements.end(), elements[0],
-        [&delim](const std::string &a, const std::string &b) {
-          return a + delim + b;
-        });
+    std::string result = elements[0];
+    for (std::size_t i = 1; i < elements.size(); ++i) {
+      result += delim + elements[i];
+    }
+    return result;
   };
 
   if (rankInPrint == 0) {
+    if (stats.id.empty()) {
+      return true;
+    }
+
+    constexpr std::size_t max_loops = 1000;
+    std::vector<double> exclusiveTimeSum = stats.timeSum;
+    std::vector<int> parentIndexStack;
+    // Calculate exclusive timers for flamegraph by removing children
+    for (std::size_t i = 1; i < stats.id.size(); ++i) {
+      const int currentLevel = stats.level[i];
+      while (!parentIndexStack.empty() &&
+             stats.level[parentIndexStack.back()] >= currentLevel) {
+        counter++;
+        parentIndexStack.pop_back();
+      }
+
+      if (!parentIndexStack.empty()) {
+        int parentIndex = parentIndexStack.back();
+        exclusiveTimeSum[parentIndex] -= stats.timeSum[i];
+      }
+      parentIndexStack.push_back(i);
+    }
+
     std::ofstream f(filename);
     if (!f.is_open()) {
       std::cerr << "Error: Could not open file for writing flamegraph data: "
                 << filename << std::endl;
       return false;
     }
+
     std::vector<std::string> stack;
-    for (unsigned int i = 1; i < stats.id.size(); i++) {
+    for (unsigned int i = 0; i < stats.id.size(); i++) {
       const int id = stats.id[i];
       const int level = stats.level[i];
+
+      if (level < 0) {
+        continue;
+      }
+
       std::string label;
       if (id != -1) {
         label = (*this)[id].getLabel();
       } else {
-        label = "Uknown element";
+        label = "Unknown element";
       }
-      double avg_seconds = 0.0;
-      if (nProcessesInPrint > 0) {
-        avg_seconds = stats.timeSum[i] / nProcessesInPrint;
-      }
-      const std::size_t value = static_cast<long long>(avg_seconds * 1.0e6);
-      if (value <= 0) {
-        continue;
-      }
-      if (level > 0) {
-        stack.resize(level - 1);
-      } else {
-        stack.clear();
-      }
+
+      stack.resize(level);
       stack.push_back(label);
+
+      auto value = 1.0e3 * exclusiveTimeSum[i];
       f << join(stack, ";") << " " << value << "\n";
     }
     f.close();
